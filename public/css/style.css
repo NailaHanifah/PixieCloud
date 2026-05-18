@@ -1,0 +1,17 @@
+
+.shadow-vintage {
+    box-shadow: 0 20px 40px -15px rgba(74, 83, 67, 0.15);
+}
+
+input:focus {
+    background-color: #F7F4EB !important;
+    box-shadow: 0 0 0 2px rgba(125, 138, 114, 0.2);
+}
+
+.smooth-transition {
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.arch-frame {
+    border-radius: 120px 120px 24px 24px;
+}
