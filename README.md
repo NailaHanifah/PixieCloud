@@ -1,58 +1,351 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Dokumen Perencanaan Proyek UAS Komputasi Awan
+# PixieCloud: Magical IaaS Simulation Platform
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+PixieCloud adalah prototipe portal penyedia layanan infrastruktur awan (*Infrastructure as a Service / IaaS*) berbasis web dengan tema *cottagecore fairytale*. Sistem memungkinkan pengguna untuk mendaftar, melihat dashboard, menyewa ruang penyimpanan virtual, serta memperoleh kredensial akses cloud menggunakan MiniStack sebagai mesin simulasi layanan AWS.
 
-## About Laravel
+Tema fantasi digunakan sebagai identitas visual dan pengalaman pengguna, sementara istilah teknis utama seperti bucket, storage, access key, dan secret key tetap dipertahankan agar sistem tetap mudah dipahami dan sesuai konteks komputasi awan.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+# 1. Tujuan Sistem
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+PixieCloud dirancang untuk memenuhi kebutuhan simulasi platform IaaS dengan fitur utama berikut:
 
-## Learning Laravel
+- Registrasi dan autentikasi pengguna
+- Dashboard pemantauan kuota penyimpanan
+- Penyewaan storage berbasis bucket
+- Pembuatan bucket terisolasi otomatis menggunakan MiniStack
+- Pembuatan Access Key dan Secret Key
+- Pencatatan aktivitas pengguna
+- Simulasi pembatasan kuota layanan cloud
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+---
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+# 2. Arsitektur Sistem
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Diagram Arsitektur Sederhana
 
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```text
+User
+   ↓
+Frontend Web (React / Blade / Tailwind)
+   ↓
+Backend API (Express / Laravel)
+   ↓
+Database (PostgreSQL / MySQL)
+   ↓
+MiniStack API
+   ↓
+Bucket & Cloud Credentials
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Alur Utama Sistem
 
-## Contributing
+```text
+Register User
+   ↓
+Backend membuat akun user
+   ↓
+MiniStack membuat Access Key & Secret Key
+   ↓
+Sistem membuat bucket default
+   ↓
+Data disimpan ke database
+   ↓
+User masuk ke dashboard
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+---
 
-## Code of Conduct
+# 3. Arsitektur Data (Database Schema)
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Database menggunakan PostgreSQL atau MySQL dengan struktur tabel berikut:
 
-## Security Vulnerabilities
+## Tabel `users`
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Menyimpan informasi akun pengguna dan kredensial cloud.
 
-## License
+| Field | Tipe | Keterangan |
+|---|---|---|
+| id | INT | Primary Key, Auto Increment |
+| username | VARCHAR | Nama pengguna |
+| email | VARCHAR | Unique |
+| password | VARCHAR | Password yang telah di-hash |
+| ministack_access_key | VARCHAR | Nullable |
+| ministack_secret_key | VARCHAR | Nullable |
+| created_at | TIMESTAMP | Waktu pembuatan |
+| updated_at | TIMESTAMP | Waktu pembaruan |
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## Tabel `subscriptions`
+
+Menyimpan paket layanan aktif pengguna.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| id | INT | Primary Key |
+| user_id | INT | Foreign Key → users.id |
+| plan_name | ENUM | Nama paket |
+| max_buckets | INT | Maksimal jumlah bucket |
+| max_storage_mb | INT | Total kapasitas maksimal |
+| status | ENUM | Active / Expired |
+| start_date | TIMESTAMP | Tanggal mulai |
+| end_date | TIMESTAMP | Tanggal berakhir |
+
+---
+
+## Tabel `buckets`
+
+Mencatat bucket yang dibuat untuk setiap pengguna.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| id | INT | Primary Key |
+| user_id | INT | Foreign Key → users.id |
+| bucket_name | VARCHAR | Unique |
+| allocated_size_mb | INT | Simulasi kapasitas bucket |
+| created_at | TIMESTAMP | Waktu pembuatan |
+
+Format penamaan bucket:
+
+```text
+pixie-[username]-[random]
+```
+
+Contoh:
+
+```text
+pixie-elaina-a1b2
+```
+
+---
+
+## Tabel `activity_logs`
+
+Mencatat aktivitas utama sistem.
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| id | INT | Primary Key |
+| user_id | INT | Foreign Key → users.id |
+| activity | VARCHAR | Deskripsi aktivitas |
+| ip_address | VARCHAR | IP pengguna |
+| created_at | TIMESTAMP | Waktu aktivitas |
+
+Contoh log:
+
+```text
+"Membuat bucket baru: pixie-elaina-a1b2"
+```
+
+---
+
+# 4. Detail Alur Sistem & Integrasi MiniStack
+
+## Alur 1 — Registrasi dan Provisioning Otomatis
+
+Untuk memenuhi requirement pembuatan bucket otomatis:
+
+1. User mengisi form registrasi
+2. Backend menyimpan data pengguna ke database
+3. Backend memanggil API MiniStack untuk membuat user cloud
+4. MiniStack mengembalikan:
+   - Access Key
+   - Secret Key
+5. Sistem otomatis memberikan paket default:
+   - Pixie Dust Pouch Plan
+6. Sistem membuat 1 bucket default:
+   - `pixie-[username]-init`
+7. Data bucket dan kredensial disimpan ke database
+8. User diarahkan ke dashboard
+
+---
+
+## Alur 2 — Dashboard dan Monitoring Kuota
+
+Dashboard menampilkan:
+
+- Informasi paket aktif
+- Jumlah bucket aktif
+- Sisa kuota storage
+- Daftar bucket
+- Riwayat aktivitas
+- Access Key dan Secret Key
+
+## Visualisasi Kuota
+
+Sistem menggunakan grafik sederhana (*doughnut chart*) untuk membandingkan:
+
+- kapasitas terpakai
+- kapasitas maksimal paket
+
+## Keamanan Kredensial
+
+Secara default:
+
+```text
+Secret Key = ********
+```
+
+User harus memasukkan ulang password untuk melihat Secret Key.
+
+---
+
+## Alur 3 — Penyewaan Storage dan Validasi Kuota
+
+Ketika user membuat bucket baru:
+
+### Validasi Jumlah Bucket
+
+Backend menghitung jumlah bucket aktif milik pengguna.
+
+Jika jumlah bucket sudah mencapai batas paket:
+
+```text
+Permintaan bucket baru ditolak
+```
+
+### Validasi Kapasitas
+
+Sistem menggunakan simulasi kuota berbasis database untuk menghitung:
+
+```text
+total kapasitas bucket user
+≤
+max_storage_mb
+```
+
+Jika melebihi batas paket:
+
+```text
+Permintaan ditolak
+```
+
+### Provisioning Bucket
+
+Jika validasi berhasil:
+
+1. Backend memanggil API MiniStack
+2. Bucket dibuat
+3. Aktivitas dicatat pada `activity_logs`
+
+---
+
+## Alur 4 — Permintaan Kredensial
+
+User dapat melihat kembali Access Key dan Secret Key melalui dashboard.
+
+Untuk menjaga kestabilan sistem, fitur *Regenerate Key* tidak menjadi fitur utama pada versi awal sistem dan hanya akan diimplementasikan jika integrasi MiniStack telah stabil.
+
+---
+
+# 5. API Endpoint Utama
+
+| Method | Endpoint | Fungsi |
+|---|---|---|
+| POST | /register | Registrasi pengguna |
+| POST | /login | Login pengguna |
+| GET | /dashboard | Mengambil data dashboard |
+| POST | /bucket/create | Membuat bucket baru |
+| GET | /buckets | Melihat daftar bucket |
+| GET | /logs | Melihat aktivitas pengguna |
+
+---
+
+# 6. Paket Layanan (Subscription Plans)
+
+| Nama Paket | Deskripsi | Maks Bucket | Maks Kapasitas |
+|---|---|---|---|
+| Pixie Dust Pouch | Paket dasar pengguna baru | 1 Bucket | 500 MB |
+| Grove Plan | Paket menengah | 3 Bucket | 5 GB |
+| Dragon’s Hoard Plan | Paket terbesar | 10 Bucket | 50 GB |
+
+---
+
+# 7. Pembagian Kerja Tim
+
+## Anggota 1 — Frontend & UI/UX
+- Mendesain UI bertema cottagecore
+- Membuat halaman Login, Register, Dashboard
+- Menampilkan data bucket dan kuota
+
+## Anggota 2 — Backend & Authentication
+- Membangun REST API
+- Sistem Login & Register
+- JWT Authentication
+- Validasi quota logic
+
+## Anggota 3 — Database Engineer
+- Mendesain ERD
+- Membuat schema database
+- Menyiapkan query dan relasi tabel
+- Menyiapkan seeder paket layanan
+
+## Anggota 4 — Integration & Testing
+- Menghubungkan frontend dan backend
+- API testing
+- Debugging dan end-to-end testing
+- Validasi fitur login dan bucket
+
+## Anggota 5 — Cloud Infrastructure & Documentation
+- Setup MiniStack
+- Riset dan integrasi API MiniStack
+- Dokumentasi konfigurasi sistem
+- Menyusun laporan dan presentasi
+
+---
+
+# 8. Timeline Pengerjaan (4 Minggu)
+
+## Minggu 1 — Fondasi Sistem
+- Setup repository dan struktur project
+- Setup database
+- Desain UI awal
+- Setup MiniStack
+- Riset endpoint API MiniStack
+
+## Minggu 2 — Authentication & Dashboard
+- Register & Login
+- JWT Authentication
+- Dashboard awal
+- Integrasi frontend-backend
+
+## Minggu 3 — MiniStack Integration
+- Pembuatan bucket otomatis
+- Integrasi Access Key & Secret Key
+- Validasi quota storage
+- Activity logging
+
+## Minggu 4 — Testing & Finalisasi
+- Pengujian end-to-end
+- Perbaikan bug
+- Finalisasi UI
+- Penyusunan laporan
+- Persiapan presentasi demo
+
+---
+
+# 9. Teknologi yang Digunakan
+
+| Komponen | Teknologi |
+|---|---|
+| Frontend | React / Blade + Tailwind CSS |
+| Backend | Express.js / Laravel |
+| Database | PostgreSQL / MySQL |
+| Cloud Simulation | MiniStack |
+| Authentication | JWT + bcrypt |
+
+---
+
+# 10. Kesimpulan
+
+PixieCloud dirancang sebagai simulasi platform IaaS yang memenuhi kebutuhan utama komputasi awan:
+
+- Registrasi dan autentikasi pengguna
+- Penyewaan storage virtual
+- Manajemen bucket terisolasi
+- Monitoring quota
+- Integrasi kredensial cloud menggunakan MiniStack
+
+Dengan pendekatan visual bertema *cottagecore fairytale* dan implementasi konsep cloud computing yang tetap realistis, sistem ini diharapkan mampu memenuhi kebutuhan UAS sekaligus memberikan pengalaman penggunaan yang menarik dan mudah dipahami.
