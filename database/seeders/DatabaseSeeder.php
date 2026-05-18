@@ -56,25 +56,25 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // Activity logs
-    DB::table('activity_logs')->insert([
-        [
-            'user_id' => $userId,
-            'activity' => 'Melakukan registrasi akun PixieCloud.',
-            'ip_address' => '127.0.0.1',
-            'created_at' => now()->subMinutes(10),
-        ],
-        [
-            'user_id' => $userId,
-            'activity' => 'Sistem menginisialisasi plan Pixie Dust Pouch.',
-            'ip_address' => '127.0.0.1',
-            'created_at' => now()->subMinutes(9),
-        ],
-        [
-            'user_id' => $userId,
-            'activity' => 'Membuat bucket baru: pixie-elaina-init',
-            'ip_address' => '127.0.0.1',
-            'created_at' => now()->subMinutes(8),
-        ],
-    ]);
+        DB::table('activity_logs')->insert([
+            [
+                'user_id' => $userId,
+                'activity' => 'Melakukan registrasi akun PixieCloud.',
+                'ip_address' => '127.0.0.1',
+                'created_at' => now()->subMinutes(10),
+            ],
+            [
+                'user_id' => $userId,
+                'activity' => 'Sistem menginisialisasi plan Pixie Dust Pouch.',
+                'ip_address' => '127.0.0.1',
+                'created_at' => now()->subMinutes(9),
+            ],
+            [
+                'user_id' => $userId,
+                'activity' => 'Membuat bucket baru: pixie-elaina-init',
+                'ip_address' => '127.0.0.1',
+                'created_at' => now()->subMinutes(8),
+            ],
+        ]);
     }
 }
