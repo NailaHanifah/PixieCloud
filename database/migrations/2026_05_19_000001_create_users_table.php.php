@@ -9,13 +9,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id(); // INT Primary Key, Auto Increment
+            $table->id(); 
             $table->string('username');
             $table->string('email')->unique();
             $table->string('password');
-            $table->string('ministack_access_key')->nullable(); // Nullable untuk awal
-            $table->string('ministack_secret_key')->nullable(); // Nullable untuk awal
-            $table->timestamps(); // Mengcover created_at dan updated_at secara otomatis
+            $table->string('ministack_access_key')->nullable(); 
+            $table->string('ministack_secret_key')->nullable(); 
+            $table->enum('role', ['user', 'admin'])->default('user'); 
+            $table->timestamps(); 
         });
     }
 

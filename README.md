@@ -1,351 +1,151 @@
 # Dokumen Perencanaan Proyek UAS Komputasi Awan
-# PixieCloud: Magical IaaS Simulation Platform
+## PixieCloud: Eco-Centric IaaS Simulation Platform
 
-PixieCloud adalah prototipe portal penyedia layanan infrastruktur awan (*Infrastructure as a Service / IaaS*) berbasis web dengan tema *cottagecore fairytale*. Sistem memungkinkan pengguna untuk mendaftar, melihat dashboard, menyewa ruang penyimpanan virtual, serta memperoleh kredensial akses cloud menggunakan MiniStack sebagai mesin simulasi layanan AWS.
-
-Tema fantasi digunakan sebagai identitas visual dan pengalaman pengguna, sementara istilah teknis utama seperti bucket, storage, access key, dan secret key tetap dipertahankan agar sistem tetap mudah dipahami dan sesuai konteks komputasi awan.
+PixieCloud adalah prototipe portal penyedia layanan infrastruktur awan (Infrastructure as a Service) berbasis web bertema *Forest Academic & Cottagecore*. Sistem ini mengadopsi pendekatan arsitektur kontainer modern menggunakan Docker dan mensimulasikan penyediaan *Object Storage* AWS S3 terisolasi dengan MiniStack sebagai mesin di belakang layar.
 
 ---
 
-# 1. Tujuan Sistem
+## 1. Konsep Umum & Penyelarasan Analogi
 
-PixieCloud dirancang untuk memenuhi kebutuhan simulasi platform IaaS dengan fitur utama berikut:
+Untuk menjaga profesionalisme sistem tanpa menghilangkan estetika tema, digunakan pendekatan analogi *nature-centric* yang elegan (setara dengan standarisasi penamaan wilayah pada macOS):
 
-- Registrasi dan autentikasi pengguna
-- Dashboard pemantauan kuota penyimpanan
-- Penyewaan storage berbasis bucket
-- Pembuatan bucket terisolasi otomatis menggunakan MiniStack
-- Pembuatan Access Key dan Secret Key
-- Pencatatan aktivitas pengguna
-- Simulasi pembatasan kuota layanan cloud
+* **Identitas Platform:** **PixieCloud Platform** (Portal penyedia infrastruktur komputasi awan).
+* **Identitas Pengguna:** **Petualang (User)** sebagai penyewa ruang, dan **Penjaga Gerbang (Admin)** sebagai entitas verifikator infrastruktur.
+* **Sistem Transaksi:** **Direct Fiat Invoice**, sistem pembayaran langsung menggunakan mata uang Rupiah via transfer manual (simulasi) untuk membeli masa aktif paket secara berkala.
+* **Resource (Bucket):** **Vault (Enclosure)**, ruang penyimpanan objek digital yang aman, terisolasi, dan terikat pada kredensial unik pengguna.
+* **Katalog Layanan:** **Grove Specifications**, daftar kluster kapasitas ruang penyimpanan berdasarkan batas jumlah *Vault* dan ukuran gigabyte.
 
 ---
 
-# 2. Arsitektur Sistem
+## 2. Arsitektur Data & Etika Keamanan Data (Database Schema)
 
-## Diagram Arsitektur Sederhana
+Perancangan skema database ini sangat memperhatikan **Etika Data (Data Ethics)** dan **Integritas Data**. Tabel dibagi berdasarkan sifatnya: **Mutable** (data yang boleh diubah seiring waktu) dan **Immutable** (data historis yang haram diubah demi keamanan dan fungsi audit/pelacakan).
 
-```text
-User
-   ↓
-Frontend Web (React / Blade / Tailwind)
-   ↓
-Backend API (Express / Laravel)
-   ↓
-Database (PostgreSQL / MySQL)
-   ↓
-MiniStack API
-   ↓
-Bucket & Cloud Credentials
-```
+### A. DATA MUTABLE (Boleh Diperbarui)
 
-## Alur Utama Sistem
+#### 1. Tabel `users`
+Menyimpan informasi akun dan kredensial cloud MiniStack.
+* `id` (INT, Primary Key, Auto Increment)
+* `username` (VARCHAR)
+* `email` (VARCHAR, Unique)
+* `password` (VARCHAR, Hashed)
+* `ministack_access_key` (VARCHAR, Nullable)
+* `ministack_secret_key` (TEXT, Nullable) -> *Etika Data: Wajib di-encrypt oleh backend (Crypt::encryptString) sebelum disimpan.*
+* `role` (ENUM: 'user', 'admin') -> Default: 'user'
+* `timestamps()` (Mengelola `created_at` dan `updated_at` untuk keperluan pembaruan kredensial/password).
 
-```text
-Register User
-   ↓
-Backend membuat akun user
-   ↓
-MiniStack membuat Access Key & Secret Key
-   ↓
-Sistem membuat bucket default
-   ↓
-Data disimpan ke database
-   ↓
-User masuk ke dashboard
-```
+#### 2. Tabel `services`
+Katalog master spesifikasi paket (*Grove Specifications*). Hanya boleh diubah oleh Admin.
+* `id` (INT, Primary Key, Auto Increment)
+* `name` (VARCHAR) -> Pixie Plan, Elf Plan, Dragon Plan
+* `description` (TEXT)
+* `price` (INTEGER) -> Harga nominal langsung dalam Rupiah (Rp)
+* `max_buckets` (INTEGER) -> Limit jumlah Vault
+* `max_storage_mb` (INTEGER) -> Limit total kapasitas ruang dalam Megabyte
+* `timestamps()`
 
----
-
-# 3. Arsitektur Data (Database Schema)
-
-Database menggunakan PostgreSQL atau MySQL dengan struktur tabel berikut:
-
-## Tabel `users`
-
-Menyimpan informasi akun pengguna dan kredensial cloud.
-
-| Field | Tipe | Keterangan |
-|---|---|---|
-| id | INT | Primary Key, Auto Increment |
-| username | VARCHAR | Nama pengguna |
-| email | VARCHAR | Unique |
-| password | VARCHAR | Password yang telah di-hash |
-| ministack_access_key | VARCHAR | Nullable |
-| ministack_secret_key | VARCHAR | Nullable |
-| created_at | TIMESTAMP | Waktu pembuatan |
-| updated_at | TIMESTAMP | Waktu pembaruan |
+#### 3. Tabel `subscriptions`
+Mencatat paket aktif yang mengikat pengguna dengan layanan beserta masa berlakunya.
+* `id` (INT, Primary Key, Auto Increment)
+* `user_id` (INT, Foreign Key -> `users.id` ON DELETE CASCADE)
+* `service_id` (INT, Foreign Key -> `services.id` ON DELETE CASCADE)
+* `status` (ENUM: 'Active', 'Expired') -> Default: 'Active'
+* `start_date` (TIMESTAMP)
+* `end_date` (TIMESTAMP) -> Menentukan batas akhir masa aktif paket (misal: +30 hari sejak ACC)
+* `timestamps()` -> *Diperlukan untuk memantau perubahan status sewa dari Active ke Expired.*
 
 ---
 
-## Tabel `subscriptions`
+### B. DATA IMMUTABLE / APPEND-ONLY (Haram Diubah / Riwayat Statis)
 
-Menyimpan paket layanan aktif pengguna.
+#### 4. Tabel `payments`
+Mencatat riwayat transaksi konfirmasi transfer manual langsung dalam nominal Rupiah.
+* `id` (INT, Primary Key, Auto Increment)
+* `invoice_code` (VARCHAR, Unique) -> Format: `INV-YYYYMM-[Random]`
+* `user_id` (INT, Foreign Key -> `users.id`)
+* `service_id` (INT, Foreign Key -> `services.id`)
+* `amount` (INTEGER) -> Nominal Rupiah yang ditransfer
+* `proof_of_payment` (VARCHAR, Nullable) -> Nama file gambar bukti transfer
+* `status` (ENUM: 'Pending', 'Success', 'Failed') -> Default: 'Pending'
+* `timestamps()` -> *Etika Data: Kolom `updated_at` hanya berubah sekali saat Admin mengubah status pembayaran. Setelah berstatus Success, baris data ini dikunci total dan tidak boleh diubah oleh siapa pun.*
 
-| Field | Tipe | Keterangan |
-|---|---|---|
-| id | INT | Primary Key |
-| user_id | INT | Foreign Key → users.id |
-| plan_name | ENUM | Nama paket |
-| max_buckets | INT | Maksimal jumlah bucket |
-| max_storage_mb | INT | Total kapasitas maksimal |
-| status | ENUM | Active / Expired |
-| start_date | TIMESTAMP | Tanggal mulai |
-| end_date | TIMESTAMP | Tanggal berakhir |
+#### 5. Tabel `buckets`
+Mencatat metadata kontainer penyimpanan riil yang aktif di-deploy di MiniStack.
+* `id` (INT, Primary Key, Auto Increment)
+* `user_id` (INT, Foreign Key -> `users.id` ON DELETE CASCADE)
+* `bucket_name` (VARCHAR, Unique) -> Format: `pixie-[username]-[string_unik]`
+* `allocated_size_mb` (INTEGER)
+* `timestamps()` -> *Sifat: Append-Only. Data hanya bertambah saat membuat Vault baru atau terhapus total (`DELETE`) jika masa sewa habis. Tidak ada skenario pengeditan nama (`UPDATE`).*
 
----
-
-## Tabel `buckets`
-
-Mencatat bucket yang dibuat untuk setiap pengguna.
-
-| Field | Tipe | Keterangan |
-|---|---|---|
-| id | INT | Primary Key |
-| user_id | INT | Foreign Key → users.id |
-| bucket_name | VARCHAR | Unique |
-| allocated_size_mb | INT | Simulasi kapasitas bucket |
-| created_at | TIMESTAMP | Waktu pembuatan |
-
-Format penamaan bucket:
-
-```text
-pixie-[username]-[random]
-```
-
-Contoh:
-
-```text
-pixie-elaina-a1b2
-```
+#### 6. Tabel `activity_logs` (The Chronicler's Scroll)
+Catatan jejak audit sistem untuk kepentingan keamanan (*Audit Trail*).
+* `id` (INT, Primary Key, Auto Increment)
+* `user_id` (INT, Foreign Key -> `users.id` ON DELETE CASCADE)
+* `activity` (VARCHAR) -> Narasi tegas, contoh: "Mengajukan pembuatan Vault baru: pixie-elaina-x9z2"
+* `ip_address` (VARCHAR, Length: 45) -> *Etika Data: Wajib mencatat IP pengguna untuk mendeteksi anomali akses/serangan ilegal.*
+* `timestamps()` -> *Sifat: Pure Immutable. Model Laravel dikonfigurasi `public $timestamps = false;` agar record sejarah ini tidak bisa dimanipulasi setelah masuk ke database.*
 
 ---
 
-## Tabel `activity_logs`
+## 3. Detail Alur Sistem & Integrasi MiniStack Berbasis Docker
 
-Mencatat aktivitas utama sistem.
+Seluruh sistem berjalan di atas ekosistem kontainer Docker (Laravel App, MySQL/PostgreSQL, dan MiniStack Engine berbasis LocalStack) yang terisolasi dalam satu jaringan internal.
 
-| Field | Tipe | Keterangan |
-|---|---|---|
-| id | INT | Primary Key |
-| user_id | INT | Foreign Key → users.id |
-| activity | VARCHAR | Deskripsi aktivitas |
-| ip_address | VARCHAR | IP pengguna |
-| created_at | TIMESTAMP | Waktu aktivitas |
+### Alur 1: Autentikasi Keamanan Tinggi
+* User melakukan registrasi pada kontainer aplikasi web. Data disimpan ke database. Pada tahap awal ini, user belum memiliki kredensial cloud (`ministack_access_key` masih `NULL`).
 
-Contoh log:
+### Alur 2: Proses Bisnis Pembelian Masa Aktif & Verifikasi Admin
+* **Pengajuan Langganan:** User memilih paket kapasitas di halaman web (*Grove Specifications*), melihat detail nomor rekening bank simulasi, dan mengunggah gambar bukti transfer Rupiah asli. Sistem membuat baris baru di tabel `payments` dengan status `Pending`.
+* **Verifikasi Admin:** Pengguna dengan `role = admin` masuk ke dashboard khusus. Admin memeriksa keabsahan berkas gambar `proof_of_payment`.
+* **Eksekusi Otomatis:** Ketika Admin menekan tombol **"Approve"**, backend Laravel akan mengeksekusi 4 aksi berantai secara otomatis dalam satu waktu:
+    1. Mengubah status tabel `payments` menjadi `Success`.
+    2. Membuat entri masa aktif paket di tabel `subscriptions` (menghitung `start_date` dari waktu sekarang dan `end_date` otomatis bertambah 30 hari ke depan).
+    3. **Integrasi Cloud (MiniStack):** Backend mengirimkan permintaan API internal ke kontainer MiniStack untuk membuat pengguna cloud baru, mengambil *Access Key & Secret Key* aslinya, lalu menyimpannya ke tabel `users` (Secret Key wajib di-encrypt).
+    4. **Inisialisasi Resource:** Backend memerintahkan MiniStack untuk otomatis membuat *Vault* (isolated bucket) pertama dengan penamaan aman: `pixie-[username]-[string_unik]` dan menyimpannya di tabel `buckets`.
 
-```text
-"Membuat bucket baru: pixie-elaina-a1b2"
-```
-
----
-
-# 4. Detail Alur Sistem & Integrasi MiniStack
-
-## Alur 1 — Registrasi dan Provisioning Otomatis
-
-Untuk memenuhi requirement pembuatan bucket otomatis:
-
-1. User mengisi form registrasi
-2. Backend menyimpan data pengguna ke database
-3. Backend memanggil API MiniStack untuk membuat user cloud
-4. MiniStack mengembalikan:
-   - Access Key
-   - Secret Key
-5. Sistem otomatis memberikan paket default:
-   - Pixie Dust Pouch Plan
-6. Sistem membuat 1 bucket default:
-   - `pixie-[username]-init`
-7. Data bucket dan kredensial disimpan ke database
-8. User diarahkan ke dashboard
+### Alur 3: Dashboard & Manajemen Kredensial
+* **Masking Data:** Di halaman dashboard user, *Secret Key* akan disensor secara default (`********`). Disediakan tombol *"Reveal Key"* yang mewajibkan user memasukkan ulang password akun mereka demi memenuhi asas keamanan.
+* **One-Click Cloud Sync:** Menyediakan tombol *"Sync Infrastructure"* di dashboard untuk mencocokkan ulang data jika terjadi ketidaksinkronan jumlah *Vault* antara database web lokal dengan server MiniStack asli.
 
 ---
 
-## Alur 2 — Dashboard dan Monitoring Kuota
+## 4. Spesifikasi Paket Layanan (Grove Specifications)
 
-Dashboard menampilkan:
+Penamaan dirancang menggunakan makhluk fiksi-fantasi yang sangat populer (*well-known*) agar urutan tingkatannya (Small, Medium, Large) langsung dipahami secara intuitif oleh dosen penguji, serta menggunakan rasio harga dan kapasitas penyimpanan yang realistis:
 
-- Informasi paket aktif
-- Jumlah bucket aktif
-- Sisa kuota storage
-- Daftar bucket
-- Riwayat aktivitas
-- Access Key dan Secret Key
+1. **Pixie Plan (Small)**
+   * *Deskripsi:* Alokasi ruang penyimpanan dasar untuk kebutuhan mendasar aset digital skala kecil.
+   * *Batas Kuota:* Maksimal 1 Vault, Total Storage 500 MB.
+   * *Harga Langganan:* **Rp15.000 / bulan** (Setara dengan harga cloud storage personal entry-level).
 
-## Visualisasi Kuota
+2. **Griffin Plan (Medium)**
+   * *Deskripsi:* Ruang penyimpanan yang lebih luas, dirancang untuk kluster data yang membutuhkan performa stabil dan terorganisir.
+   * *Batas Kuota:* Maksimal 3 Vaults, Total Storage 5 GB (5.120 MB).
+   * *Harga Langganan:* **Rp50.000 / bulan** (Menerapkan strategi *volume discount* industri nyata untuk menarik minat pengguna beralih ke paket menengah).
 
-Sistem menggunakan grafik sederhana (*doughnut chart*) untuk membandingkan:
-
-- kapasitas terpakai
-- kapasitas maksimal paket
-
-## Keamanan Kredensial
-
-Secara default:
-
-```text
-Secret Key = ********
-```
-
-User harus memasukkan ulang password untuk melihat Secret Key.
+3. **Dragon Plan (Large)**
+   * *Deskripsi:* Spesifikasi ruang tertinggi setingkat inti wilayah utama untuk perlindungan dan penyimpanan data berskala masif.
+   * *Batas Kuota:* Maksimal 10 Vaults, Total Storage 50 GB (51.200 MB).
+   * *Harga Langganan:* **Rp150.000 / bulan** (Mencerminkan alokasi penyimpanan besar dan batas jumlah resource yang banyak).
 
 ---
 
-## Alur 3 — Penyewaan Storage dan Validasi Kuota
+## 5. Distribusi Kerja Kelompok
 
-Ketika user membuat bucket baru:
+Pengerjaan dibagi secara paralel memanfaatkan isolasi lingkungan kerja Docker agar tidak terjadi tumpang tindih fungsi:
 
-### Validasi Jumlah Bucket
-
-Backend menghitung jumlah bucket aktif milik pengguna.
-
-Jika jumlah bucket sudah mencapai batas paket:
-
-```text
-Permintaan bucket baru ditolak
-```
-
-### Validasi Kapasitas
-
-Sistem menggunakan simulasi kuota berbasis database untuk menghitung:
-
-```text
-total kapasitas bucket user
-≤
-max_storage_mb
-```
-
-Jika melebihi batas paket:
-
-```text
-Permintaan ditolak
-```
-
-### Provisioning Bucket
-
-Jika validasi berhasil:
-
-1. Backend memanggil API MiniStack
-2. Bucket dibuat
-3. Aktivitas dicatat pada `activity_logs`
-
----
-
-## Alur 4 — Permintaan Kredensial
-
-User dapat melihat kembali Access Key dan Secret Key melalui dashboard.
-
-Untuk menjaga kestabilan sistem, fitur *Regenerate Key* tidak menjadi fitur utama pada versi awal sistem dan hanya akan diimplementasikan jika integrasi MiniStack telah stabil.
-
----
-
-# 5. API Endpoint Utama
-
-| Method | Endpoint | Fungsi |
-|---|---|---|
-| POST | /register | Registrasi pengguna |
-| POST | /login | Login pengguna |
-| GET | /dashboard | Mengambil data dashboard |
-| POST | /bucket/create | Membuat bucket baru |
-| GET | /buckets | Melihat daftar bucket |
-| GET | /logs | Melihat aktivitas pengguna |
-
----
-
-# 6. Paket Layanan (Subscription Plans)
-
-| Nama Paket | Deskripsi | Maks Bucket | Maks Kapasitas |
-|---|---|---|---|
-| Pixie Dust Pouch | Paket dasar pengguna baru | 1 Bucket | 500 MB |
-| Grove Plan | Paket menengah | 3 Bucket | 5 GB |
-| Dragon’s Hoard Plan | Paket terbesar | 10 Bucket | 50 GB |
-
----
-
-# 7. Pembagian Kerja Tim
-
-## Anggota 1 — Frontend & UI/UX
-- Mendesain UI bertema cottagecore
-- Membuat halaman Login, Register, Dashboard
-- Menampilkan data bucket dan kuota
-
-## Anggota 2 — Backend & Authentication
-- Membangun REST API
-- Sistem Login & Register
-- JWT Authentication
-- Validasi quota logic
-
-## Anggota 3 — Database Engineer
-- Mendesain ERD
-- Membuat schema database
-- Menyiapkan query dan relasi tabel
-- Menyiapkan seeder paket layanan
-
-## Anggota 4 — Integration & Testing
-- Menghubungkan frontend dan backend
-- API testing
-- Debugging dan end-to-end testing
-- Validasi fitur login dan bucket
-
-## Anggota 5 — Cloud Infrastructure & Documentation
-- Setup MiniStack
-- Riset dan integrasi API MiniStack
-- Dokumentasi konfigurasi sistem
-- Menyusun laporan dan presentasi
-
----
-
-# 8. Timeline Pengerjaan (4 Minggu)
-
-## Minggu 1 — Fondasi Sistem
-- Setup repository dan struktur project
-- Setup database
-- Desain UI awal
-- Setup MiniStack
-- Riset endpoint API MiniStack
-
-## Minggu 2 — Authentication & Dashboard
-- Register & Login
-- JWT Authentication
-- Dashboard awal
-- Integrasi frontend-backend
-
-## Minggu 3 — MiniStack Integration
-- Pembuatan bucket otomatis
-- Integrasi Access Key & Secret Key
-- Validasi quota storage
-- Activity logging
-
-## Minggu 4 — Testing & Finalisasi
-- Pengujian end-to-end
-- Perbaikan bug
-- Finalisasi UI
-- Penyusunan laporan
-- Persiapan presentasi demo
-
----
-
-# 9. Teknologi yang Digunakan
-
-| Komponen | Teknologi |
-|---|---|
-| Frontend | React / Blade + Tailwind CSS |
-| Backend | Express.js / Laravel |
-| Database | PostgreSQL / MySQL |
-| Cloud Simulation | MiniStack |
-| Authentication | JWT + bcrypt |
-
----
-
-# 10. Kesimpulan
-
-PixieCloud dirancang sebagai simulasi platform IaaS yang memenuhi kebutuhan utama komputasi awan:
-
-- Registrasi dan autentikasi pengguna
-- Penyewaan storage virtual
-- Manajemen bucket terisolasi
-- Monitoring quota
-- Integrasi kredensial cloud menggunakan MiniStack
-
-Dengan pendekatan visual bertema *cottagecore fairytale* dan implementasi konsep cloud computing yang tetap realistis, sistem ini diharapkan mampu memenuhi kebutuhan UAS sekaligus memberikan pengalaman penggunaan yang menarik dan mudah dipahami.
+* **Anggota 1 — Frontend & UI/UX Designer**
+  * Merancang *UI Mockup* bertema *Forest Academic* (Sage green, cream, serif font) di Figma.
+  * Mengonversi rancangan menjadi komponen views Laravel menggunakan Tailwind CSS (Form login/register, dashboard user dengan grafik kuota sisa hari masa aktif dan storage, halaman unggah bukti bayar, dan dashboard verifikasi transaksi milik admin).
+* **Anggota 2 — Backend & Authentication Developer**
+  * Membangun sistem autentikasi multi-role (User & Admin) serta enkripsi dua arah untuk *Secret Key* MiniStack.
+  * Membuat *logic controller* untuk memproses pembuatan invoice, transaksi pembayaran manual, dan logika *middleware* untuk mengunci fitur cloud/menolak pembuatan bucket baru jika status langganan di tabel `subscriptions` sudah menyentuh `end_date` (*Expired*).
+* **Anggota 3 — Database Engineer**
+  * Menyusun struktur migrasi 6 tabel di Laravel sesuai dengan ketetapan etika data (Mutable vs Immutable).
+  * Membuat file `DatabaseSeeder.php` untuk otomatisasi pengisian katalog master paket layanan (`services`) langsung menggunakan nilai nominal Rupiah serta akun admin utama agar sistem siap diuji coba langsung setelah migrasi.
+* **Anggota 4 — Integration & Debugging Specialist**
+  * Menghubungkan komponen visual kiriman Anggota 1 dengan API backend buatan Anggota 2.
+  * Menangani logika penguncian kuota (memastikan sistem menolak pembuatan bucket di frontend jika jumlah baris di tabel `buckets` sudah menyentuh limit `max_buckets` pada paketnya).
+* **Anggota 5 — Cloud Infrastructure, MiniStack & Documentation**
+  * Menyusun konfigurasi file `docker-compose.yml` untuk menyatukan kontainer aplikasi web, database, dan mesin `nahuelnucera/ministack`.
+  * Membuat fungsi modul penghubung (*SDK/API Connector wrapper*) di Laravel yang bertugas menembak API MiniStack untuk perintah pembuatan user cloud, pembuatan bucket, dan perintah *regenerate key*. Menyusun laporan akhir UAS.

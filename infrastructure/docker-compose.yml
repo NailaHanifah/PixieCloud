@@ -1,14 +1,69 @@
 version: '3.8'
 
 services:
+  # 1. PORTAL WEB PIXIECLOUD (Laravel 11 App)
+  pixie-web-app:
+    image: bitnami/laravel:11
+    container_name: pixie-web-app
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_URL=http://localhost:8000
+      
+      - DB_CONNECTION=mysql
+      - DB_HOST=pixie-database
+      - DB_PORT=3306
+      - DB_DATABASE=pixiecloud_db
+      - DB_USERNAME=pixie_user
+      - DB_PASSWORD=secret_forest_pwd
+      
+      # Koneksi ke MiniStack bawaan
+      - AWS_ENDPOINT=http://pixiecloud-ministack:4566
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_USE_PATH_STYLE_ENDPOINT=true
+    volumes:
+      - .:/app
+    networks:
+      - pixiecloud-network
+    depends_on:
+      - pixie-database
+      - ministack
+
+  # 2. DATABASE UTAMA (MySQL)
+  pixie-database:
+    image: mysql:8.0
+    container_name: pixie-database
+    environment:
+      - MYSQL_DATABASE=pixiecloud_db
+      - MYSQL_USER=pixie_user
+      - MYSQL_PASSWORD=secret_forest_pwd
+      - MYSQL_ROOT_PASSWORD=super_secret_root_pwd
+    volumes:
+      - pixie-db-data:/var/lib/mysql
+    networks:
+      - pixiecloud-network
+
+  # 3. MESIN MINISTACK 
   ministack:
     image: nahuelnucera/ministack
     container_name: pixiecloud-ministack
     ports:
-      - "4566:4566"
+      - "4566:4566" 
     environment:
       - SERVICES=s3,iam
       - AWS_DEFAULT_REGION=us-east-1
     volumes:
       - ./init-scripts:/etc/localstack/init/ready.d
       - ./data:/var/lib/localstack
+    networks:
+      - pixiecloud-network
+
+networks:
+  pixiecloud-network:
+    driver: bridge
+
+volumes:
+  pixie-db-data:
+    driver: local

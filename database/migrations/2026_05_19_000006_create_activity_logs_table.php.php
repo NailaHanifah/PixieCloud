@@ -11,9 +11,9 @@ return new class extends Migration
         Schema::create('activity_logs', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->string('activity'); // Deskripsi log aktivitas
-            $table->string('ip_address')->nullable(); // Menampung IP Address user
-            $table->timestamp('created_at')->useCurrent();
+            $table->string('activity'); 
+            $table->string('ip_address', 45)->nullable(); 
+            $table->timestamps();
         });
     }
 

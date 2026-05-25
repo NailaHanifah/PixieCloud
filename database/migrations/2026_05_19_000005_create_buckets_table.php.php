@@ -11,9 +11,9 @@ return new class extends Migration
         Schema::create('buckets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->string('bucket_name')->unique(); // Unique sesuai dokumen penamaan pixie-[username]-[random]
+            $table->string('bucket_name')->unique(); 
             $table->integer('allocated_size_mb');
-            $table->timestamp('created_at')->useCurrent();
+            $table->timestamps(); // Sifat Append-Only (hanya INSERT atau DELETE, tidak ada UPDATE)
         });
     }
 

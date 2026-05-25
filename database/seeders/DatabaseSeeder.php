@@ -1,80 +1,117 @@
-<?php
-
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Disable foreign key constraints (compatible SQLite + MySQL)
-        Schema::disableForeignKeyConstraints();
-
-        // Bersihkan data lama
-        DB::table('activity_logs')->truncate();
-        DB::table('buckets')->truncate();
-        DB::table('subscriptions')->truncate();
-        DB::table('users')->truncate();
-
-        // Enable lagi foreign key constraints
-        Schema::enableForeignKeyConstraints();
-
-        // Buat user dummy utama
-        $userId = DB::table('users')->insertGetId([
-            'username' => 'elaina',
-            'email' => 'elaina@pixie.com',
-            'password' => Hash::make('rahasia123'),
-            'ministack_access_key' => 'AKIAIOSFODNN7EXAMPLE',
-            'ministack_secret_key' => 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        // 1. SEED MASTER UTAMA (Wajib)
+        
+        // Akun Admin (Penjaga Gerbang)
+        DB::table('users')->insert([
+            'username' => 'gatekeeper_pixie',
+            'email' => 'admin@pixiecloud.test',
+            'password' => Hash::make('SecretGatekeeper2026'),
+            'role' => 'admin',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        // Data subscription
+        // Katalog Paket (Grove Specifications)
+        DB::table('services')->insert([
+            [
+                'id' => 1,
+                'name' => 'Pixie Plan',
+                'description' => 'Alokasi ruang penyimpanan dasar untuk kebutuhan mendasar aset digital skala kecil.',
+                'price' => 15000,
+                'max_buckets' => 1,
+                'max_storage_mb' => 500,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 2,
+                'name' => 'Griffin Plan',
+                'description' => 'Ruang penyimpanan yang lebih luas, dirancang untuk kluster data yang membutuhkan performa stabil dan terorganisir.',
+                'price' => 50000,
+                'max_buckets' => 3,
+                'max_storage_mb' => 5120,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'id' => 3,
+                'name' => 'Dragon Plan',
+                'description' => 'Spesifikasi ruang tertinggi setingkat inti wilayah utama untuk perlindungan dan penyimpanan data berskala masif.',
+                'price' => 150000,
+                'max_buckets' => 10,
+                'max_storage_mb' => 51200,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+
+        // 2. SEED DATA DUMMY UNTUK SIMULASI UI & FITUR 
+
+        // User 1: Petualang Baru (Belum langganan, untuk tes alur beli paket)
+        DB::table('users')->insert([
+            'id' => 2,
+            'username' => 'elaina_explorer',
+            'email' => 'elaina@adventurer.test',
+            'password' => Hash::make('PasswordPetualang'),
+            'role' => 'user',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // User 2: Petualang yang Menunggu Verifikasi (Untuk tes dashboard Admin)
+        DB::table('users')->insert([
+            'id' => 3,
+            'username' => 'frieren_mage',
+            'email' => 'frieren@adventurer.test',
+            'password' => Hash::make('PasswordPetualang'),
+            'role' => 'user',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // Transaksi Pending milik User 2 (Frieren) agar Admin punya data untuk di-Approve saat demo
+        DB::table('payments')->insert([
+            'invoice_code' => 'INV-202605-' . Str::upper(Str::random(5)),
+            'user_id' => 3,
+            'service_id' => 3, // Ingin beli Dragon Plan
+            'amount' => 150000,
+            'proof_of_payment' => 'dummy_transfer_proof.jpg',
+            'status' => 'Pending',
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2),
+        ]);
+
+        // User 3: Petualang yang Sudah Expired (Untuk tes middleware penguncian resource)
+        DB::table('users')->insert([
+            'id' => 4,
+            'username' => 'stark_warrior',
+            'email' => 'stark@adventurer.test',
+            'password' => Hash::make('PasswordPetualang'),
+            'role' => 'user',
+            'created_at' => now()->subMonths(2),
+            'updated_at' => now()->subMonths(2),
+        ]);
+
+        // Paket Expired milik User 3 (Stark)
         DB::table('subscriptions')->insert([
-            'user_id' => $userId,
-            'plan_name' => 'Pixie Dust Pouch',
-            'max_buckets' => 1,
-            'max_storage_mb' => 500,
-            'status' => 'Active',
-            'start_date' => now(),
-            'end_date' => now()->addMonth(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // Bucket default
-        DB::table('buckets')->insert([
-            'user_id' => $userId,
-            'bucket_name' => 'pixie-elaina-init',
-            'allocated_size_mb' => 100,
-            'created_at' => now(),
-        ]);
-
-        // Activity logs
-        DB::table('activity_logs')->insert([
-            [
-                'user_id' => $userId,
-                'activity' => 'Melakukan registrasi akun PixieCloud.',
-                'ip_address' => '127.0.0.1',
-                'created_at' => now()->subMinutes(10),
-            ],
-            [
-                'user_id' => $userId,
-                'activity' => 'Sistem menginisialisasi plan Pixie Dust Pouch.',
-                'ip_address' => '127.0.0.1',
-                'created_at' => now()->subMinutes(9),
-            ],
-            [
-                'user_id' => $userId,
-                'activity' => 'Membuat bucket baru: pixie-elaina-init',
-                'ip_address' => '127.0.0.1',
-                'created_at' => now()->subMinutes(8),
-            ],
+            'user_id' => 4,
+            'service_id' => 1, // Pernah beli Pixie Plan
+            'status' => 'Expired',
+            'start_date' => now()->subMonths(2),
+            'end_date' => now()->subMonth(), // Sudah habis bulan lalu
+            'created_at' => now()->subMonths(2),
+            'updated_at' => now()->subMonth(),
         ]);
     }
 }
