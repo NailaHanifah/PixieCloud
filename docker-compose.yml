@@ -1,0 +1,13 @@
+services:
+  # MESIN MINISTACK (LOCALSTACK SIMULATOR)
+  ministack:
+    image: nahuelnucera/ministack
+    container_name: pixiecloud-ministack
+    ports:
+      - "4566:4566" 
+    environment:
+      - SERVICES=s3,iam
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - ./init-scripts:/etc/localstack/init/ready.d
+      - ./data:/var/lib/localstack

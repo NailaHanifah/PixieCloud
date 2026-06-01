@@ -3,17 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Service;
 use App\Models\Subscription;
+use App\Models\CloudCredential;
 use App\Models\Bucket;
 use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    public function showLandingPage()
+    {
+        return view('welcome');
+    }
+
     public function showLoginForm()
     {
         return view('login');
@@ -33,28 +41,26 @@ class AuthController extends Controller
 
         $credentials = $request->only('email', 'password');
 
-        if (Auth::attempt($credentials)) {
-            $request->session()->regenerate();
-            
-            // Catat aktivitas login
-            ActivityLog::create([
-                'user_id' => Auth::id(),
-                'activity' => 'Berhasil login ke sistem',
-                'ip_address' => $request->ip(),
-                'created_at' => now(),
-            ]);
+        try {
+            if (Auth::attempt($credentials)) {
+                $request->session()->regenerate();
+                
+                ActivityLog::create([
+                    'user_id' => Auth::id(),
+                    'activity' => 'Berhasil login ke portal PixieCloud',
+                    'ip_address' => $request->ip(),
+                ]);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Login berhasil',
-                'redirect' => '/dashboard'
-            ]);
+                $redirectUrl = (Auth::user()->role === 'admin') ? '/admin/dashboard' : '/dashboard';
+
+                return redirect($redirectUrl)->with('success', 'Gerbang akses terbuka. Selamat datang kembali!');
+            }
+
+            return redirect()->back()->withInput()->with('error', 'Alamat email atau kata sandi Anda tidak cocok dengan catatan kami.');
+
+        } catch (\Exception $e) {
+            return redirect()->back()->withInput()->with('error', 'Otentikasi gagal: ' . $e->getMessage());
         }
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Email atau password salah'
-        ], 401);
     }
 
     public function register(Request $request)
@@ -62,86 +68,78 @@ class AuthController extends Controller
         $request->validate([
             'username' => 'required|string|min:3|max:255|unique:users',
             'email' => 'required|email|unique:users',
-            'password' => 'required|string|min:6',
+            'password' => 'required|string|min:6|confirmed',
         ]);
 
         DB::beginTransaction();
 
         try {
-            // Generate MiniStack credentials (simulasi)
-            $accessKey = 'AKIA' . Str::random(16);
-            $secretKey = Str::random(40);
-
-            // Buat user baru
             $user = User::create([
                 'username' => $request->username,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'ministack_access_key' => $accessKey,
-                'ministack_secret_key' => $secretKey,
+                'role' => 'user', 
             ]);
 
-            // Buat subscription default (Pixie Dust Pouch)
-            Subscription::create([
+            $defaultService = Service::find(1);
+            
+            if (!$defaultService) {
+                throw new \Exception('Kluster spesifikasi layanan bawaan tidak ditemukan.');
+            }
+
+            $subscription = Subscription::create([
                 'user_id' => $user->id,
-                'plan_name' => 'Pixie Dust Pouch',
-                'max_buckets' => 1,
-                'max_storage_mb' => 500,
-                'status' => 'Active',
+                'service_id' => $defaultService->id,
+                'status' => 'Active', 
                 'start_date' => now(),
-                'end_date' => now()->addMonth(),
+                'end_date' => now()->addMonth(), 
             ]);
 
-            // Buat bucket terisolasi di MiniStack
-            $bucketName = 'pixie-' . $request->username . '-' . Str::random(6);
+            $accessKey = 'PXC_ACCESS_' . strtoupper(Str::random(16));
+            $secretKey = 'pxc_secret_' . Str::random(32);
+
+            CloudCredential::create([
+                'subscription_id' => $subscription->id,
+                'ministack_access_key' => $accessKey,
+                'ministack_secret_key' => Crypt::encryptString($secretKey), 
+                'status' => 'Active', 
+            ]);
+
+            $bucketName = 'pixie-' . strtolower($request->username) . '-' . Str::random(4);
+            
             Bucket::create([
                 'user_id' => $user->id,
                 'bucket_name' => $bucketName,
-                'allocated_size_mb' => 100,
-                'created_at' => now(),
-            ]);
-
-            // Catat aktivitas registrasi
-            ActivityLog::create([
-                'user_id' => $user->id,
-                'activity' => 'Melakukan registrasi akun PixieCloud',
-                'ip_address' => $request->ip(),
-                'created_at' => now(),
+                'allocated_size_mb' => $defaultService->max_storage_mb, 
             ]);
 
             ActivityLog::create([
                 'user_id' => $user->id,
-                'activity' => 'Sistem menginisialisasi plan Pixie Dust Pouch',
+                'activity' => 'Melakukan registrasi identitas akun baru di portal PixieCloud',
                 'ip_address' => $request->ip(),
-                'created_at' => now(),
             ]);
 
             ActivityLog::create([
                 'user_id' => $user->id,
-                'activity' => "Membuat bucket baru: {$bucketName}",
+                'activity' => "Mengaktifkan kluster paket {$defaultService->name} secara instan via Self-Service",
                 'ip_address' => $request->ip(),
-                'created_at' => now(),
+            ]);
+
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'activity' => "Mendirikan ruang penyimpanan terisolasi (Vault): {$bucketName}",
+                'ip_address' => $request->ip(),
             ]);
 
             DB::commit();
 
-            // Auto login setelah register
             Auth::login($user);
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Registrasi berhasil',
-                'redirect' => '/dashboard',
-                'access_key' => $accessKey,
-                'secret_key' => $secretKey,
-            ]);
+            return redirect('/dashboard')->with('success', 'Akun dan infrastruktur data Anda berhasil didirikan!');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json([
-                'success' => false,
-                'message' => 'Registrasi gagal: ' . $e->getMessage()
-            ], 500);
+            return redirect()->back()->withInput()->with('error', 'Registrasi gagal: ' . $e->getMessage());
         }
     }
 
@@ -150,9 +148,8 @@ class AuthController extends Controller
         if (Auth::check()) {
             ActivityLog::create([
                 'user_id' => Auth::id(),
-                'activity' => 'Logout dari sistem',
+                'activity' => 'Meninggalkan portal PixieCloud (Logout)',
                 'ip_address' => $request->ip(),
-                'created_at' => now(),
             ]);
         }
 

@@ -2,11 +2,11 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
-use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\CredentialController; 
+use App\Http\Controllers\StorageController; 
+use App\Http\Controllers\ServiceController; 
 
-Route::get('/', function () {
-    return view('welcome');
-});
+Route::get('/', [AuthController::class, 'showLandingPage'])->name('welcome');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
@@ -16,5 +16,18 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    
+    Route::get('/dashboard', [CredentialController::class, 'revealCredentialsPage'])->name('dashboard');
+    Route::post('/dashboard/reveal', [CredentialController::class, 'showCredentials'])->name('dashboard.reveal');
+    
+    // Paket Sewa
+    Route::get('/services', [ServiceController::class, 'index'])->name('services');
+    Route::post('/services/upgrade', [ServiceController::class, 'upgrade'])->name('services.upgrade'); 
+    
+    // Penyimpanan
+    Route::get('/storage', [StorageController::class, 'index'])->name('storage');
+    Route::post('/storage/upload', [StorageController::class, 'upload'])->name('storage.upload'); 
+    Route::get('/storage/download/{id}', [StorageController::class, 'download'])->name('storage.download');
+    
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

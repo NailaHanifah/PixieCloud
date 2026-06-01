@@ -2,28 +2,28 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Subscription extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'user_id',
-        'plan_name',
-        'max_buckets',
-        'max_storage_mb',
-        'status',
+        'service_id',
+        'status', 
         'start_date',
         'end_date',
     ];
 
-    protected $casts = [
-        'start_date' => 'datetime',
-        'end_date' => 'datetime',
-    ];
-
-    public function user(): BelongsTo
+    public function service()
     {
-        return $this->belongsTo(User::class);
+        return $this->belongsTo(Service::class, 'service_id');
+    }
+
+    public function cloudCredential()
+    {
+        return $this->hasOne(CloudCredential::class, 'subscription_id');
     }
 }

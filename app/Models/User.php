@@ -2,16 +2,11 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
+use Illuminate\Database\Eloquent\Relations\HasMany; 
+use Illuminate\Database\Eloquent\Relations\HasOne;  
 class User extends Authenticatable
 {
     use HasFactory, Notifiable;
@@ -20,33 +15,26 @@ class User extends Authenticatable
         'username',
         'email',
         'password',
-        'ministack_access_key',
-        'ministack_secret_key',
+        'role', 
     ];
 
     protected $hidden = [
         'password',
-        'ministack_secret_key',
         'remember_token',
     ];
 
-    protected $casts = [
-        'email_verified_at' => 'datetime',
-        'password' => 'hashed',
-    ];
-
-    public function subscription()
+    public function activeSubscription(): HasOne
     {
-        return $this->hasOne(Subscription::class);
+        return $this->hasOne(Subscription::class, 'user_id')->where('status', 'Active');
     }
 
-    public function buckets()
+    public function buckets(): HasMany
     {
-        return $this->hasMany(Bucket::class);
+        return $this->hasMany(Bucket::class, 'user_id');
     }
 
-    public function activityLogs()
+    public function activityLogs(): HasMany
     {
-        return $this->hasMany(ActivityLog::class);
+        return $this->hasMany(ActivityLog::class, 'user_id');
     }
 }
