@@ -22,7 +22,8 @@
                 <a href="/services" class="font-semibold text-[#2C3E2B] border-b-2 border-[#2C3E2B] pb-1">Paket Sewa</a>
                 <a href="/dashboard" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Kredensial</a>
                 <a href="/storage" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Penyimpanan</a>
-                
+                <a href="/logs" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Riwayat</a>
+
                 <span class="text-xs px-3 py-1 bg-[#F4F1EA] rounded-full text-[#5C6B5D] font-medium">
                     Status: {{ $activeSubscription ? 'Aktif 🟢' : 'Nonaktif 🔴' }}
                 </span>

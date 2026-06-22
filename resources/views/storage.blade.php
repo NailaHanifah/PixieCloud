@@ -22,6 +22,7 @@
                 <a href="/services" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Paket Sewa</a>
                 <a href="/dashboard" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Kredensial</a>
                 <a href="/storage" class="font-semibold text-[#2C3E2B] border-b-2 border-[#2C3E2B] pb-1">Penyimpanan</a>
+                <a href="/logs" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Riwayat</a>
 
                 <span class="text-xs px-3 py-1 bg-[#F4F1EA] rounded-full text-[#5C6B5D] font-medium">
                     Vault: {{ $bucket ? Str::lower($bucket->bucket_name) : 'Belum Terbuat' }}
@@ -51,7 +52,7 @@
             
             <div class="bg-[#FAF8F5] rounded-[2rem] p-6 border border-[#E6DFD3] md:col-span-1">
                 <h2 class="font-serif text-lg text-[#2C3E2B] mb-2">Unggah Berkas Baru</h2>
-                <p class="text-xs text-[#8C8275] leading-relaxed mb-6">Sistem akan memvalidasi kecocokan kunci IAM Anda sebelum berkas didorong masuk.</p>
+                <p class="text-xs text-[#8C8275] leading-relaxed mb-6">Sistem akan memvalidasi kecocokan kuota memori sebelum berkas didorong masuk.</p>
 
                 <form action="{{ route('storage.upload') }}" method="POST" enctype="multipart/form-data" class="space-y-4">
                     @csrf
@@ -96,10 +97,21 @@
                                     <td class="py-3.5 text-[#8C8275] whitespace-nowrap">
                                         {{ round($object->file_size_bytes / (1024 * 1024), 2) }} MB
                                     </td>
-                                    <td class="py-3.5 text-right whitespace-nowrap">
+                                    <td class="py-3.5 text-right whitespace-nowrap flex items-center justify-end gap-3">
                                         <a href="{{ route('storage.download', $object->id) }}" target="_blank" class="text-[#8C626F] hover:underline font-medium">
                                             Unduh
                                         </a>
+                                        
+                                        <button type="button" 
+                                                onclick="openDeleteModal('{{ $object->id }}', '{{ $object->object_key }}')" 
+                                                class="text-red-600 hover:text-red-800 font-medium transition pl-2 border-l border-[#E6DFD3] cursor-pointer">
+                                            Hapus
+                                        </button>
+
+                                        <form id="delete-form-{{ $object->id }}" action="{{ route('storage.destroy', $object->id) }}" method="POST" class="hidden">
+                                            @csrf
+                                            @method('DELETE')
+                                        </form>
                                     </td>
                                 </tr>
                             @empty
@@ -128,7 +140,27 @@
             </div>
             
             <div id="preview-content" class="flex-grow overflow-auto bg-[#F4F1EA] rounded-xl p-4 flex items-center justify-center min-h-[300px]">
-                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-[#FAF8F5] rounded-[2rem] border border-[#E6DFD3] max-w-sm w-full p-6 shadow-2xl text-center transform scale-95 transition-all duration-200">
+            <div class="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4 text-base">
+                ⚠️
+            </div>
+            <h3 class="font-serif text-lg text-[#2C3E2B] mb-2">Destruksi Permanen</h3>
+            <p class="text-xs text-[#8C8275] leading-relaxed mb-6">
+                Apakah Anda yakin ingin menghancurkan objek <span id="delete-target-name" class="font-mono text-[#8C626F] font-semibold break-all"></span> secara permanen dari Vault? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div class="grid grid-cols-2 gap-3 text-xs font-medium">
+                <button type="button" onclick="closeDeleteModal()" class="w-full bg-[#F4F1EA] text-[#5C6B5D] py-3 rounded-xl hover:bg-[#E6DFD3] transition">
+                    Batalkan
+                </button>
+                <button type="button" id="confirm-delete-btn" class="w-full bg-red-600 text-white py-3 rounded-xl hover:bg-red-700 transition shadow-sm">
+                    Ya, Hancurkan
+                </button>
+            </div>
         </div>
     </div>
 
@@ -137,6 +169,8 @@
     </footer>
 
     <script>
+        let activeDeleteFormId = null;
+
         function displayFileName() {
             const fileInput = document.getElementById('object_file');
             const labelText = document.getElementById('file-label-text');
@@ -147,29 +181,22 @@
             }
         }
 
-        // 🌿 FUNGSI MEMBUKA MODAL INSPEKSI FILE SECARA LIVE
-        function openPreviewModal(filename, url, mimeType) {
+        function openPreviewModal(filename, downloadUrl, mimeType) {
             document.getElementById('preview-modal').classList.remove('hidden');
             document.getElementById('preview-filename').innerText = filename;
             
             const contentContainer = document.getElementById('preview-content');
-            contentContainer.innerHTML = ''; // Hapus sisa renderan lama
+            contentContainer.innerHTML = '';
 
-            // Jika berkas berupa gambar, tampilkan elemen <img> asli
             if (mimeType.startsWith('image/')) {
-                contentContainer.innerHTML = `<img src="${url}" class="max-w-full max-h-[50vh] object-contain rounded-lg shadow-sm">`;
-            } 
-            // Jika berkas berupa PDF, muat menggunakan tag <embed>
-            else if (mimeType === 'application/pdf') {
-                contentContainer.innerHTML = `<embed src="${url}" type="application/pdf" class="w-full h-[50vh] rounded-lg">`;
-            } 
-            // Jika ekstensi lain (seperti txt, json, php) tampilkan blok simulasi terenkripsi aman
-            else {
+                const localImageUrl = window.location.origin + '/uploads/' + filename;
+                contentContainer.innerHTML = `<img src="${localImageUrl}" class="max-w-full max-h-[50vh] object-contain rounded-lg shadow-sm">`;
+            } else {
                 contentContainer.innerHTML = `
                     <div class="text-center p-6">
                         <span class="text-3xl block mb-2">📄</span>
-                        <p class="text-xs text-[#2C3E2B] font-mono mb-2">[Encrypted Secure Object Block]</p>
-                        <a href="${url}" target="_blank" class="text-xs bg-[#2C3E2B] text-white px-4 py-2 rounded-lg hover:bg-[#3D4A3E] transition inline-block">Buka Tab Baru untuk Inspeksi</a>
+                        <p class="text-xs text-[#2C3E2B] font-mono mb-2">[Object Isolated Securely]</p>
+                        <a href="${downloadUrl}" target="_blank" class="text-xs bg-[#2C3E2B] text-white px-4 py-2 rounded-lg hover:bg-[#3D4A3E] transition inline-block">Unduh Objek</a>
                     </div>`;
             }
         }
@@ -178,6 +205,35 @@
             document.getElementById('preview-modal').classList.add('hidden');
             document.getElementById('preview-content').innerHTML = '';
         }
+
+        // 🌿 FUNGSI PENGENDALI MODAL DESTRUKSI CUSTOM
+        function openDeleteModal(id, filename) {
+            activeDeleteFormId = 'delete-form-' + id;
+            document.getElementById('delete-target-name').innerText = filename;
+            
+            const modal = document.getElementById('delete-modal');
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modal.firstElementChild.classList.remove('scale-95');
+                modal.firstElementChild.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeDeleteModal() {
+            const modal = document.getElementById('delete-modal');
+            modal.firstElementChild.classList.remove('scale-100');
+            modal.firstElementChild.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                activeDeleteFormId = null;
+            }, 150);
+        }
+
+        document.getElementById('confirm-delete-btn').addEventListener('click', function() {
+            if (activeDeleteFormId) {
+                document.getElementById(activeDeleteFormId).submit();
+            }
+        });
     </script>
 </body>
 </html>

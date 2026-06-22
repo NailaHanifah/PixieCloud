@@ -45,9 +45,26 @@ class AuthController extends Controller
             if (Auth::attempt($credentials)) {
                 $request->session()->regenerate();
                 
+                $user = Auth::user();
+
+                $bucket = Bucket::where('user_id', $user->id)->first();
+                
+                if ($bucket) {
+                    $cleanBucketName = strtolower($bucket->bucket_name);
+                    $miniStackUrl = "http://127.0.0.1:4566/" . $cleanBucketName;
+
+                    $ch = curl_init();
+                    curl_setopt($ch, CURLOPT_URL, $miniStackUrl);
+                    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT"); 
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+                    curl_exec($ch);
+                    curl_close($ch);
+                }
+                
                 ActivityLog::create([
-                    'user_id' => Auth::id(),
-                    'activity' => 'Berhasil login ke portal PixieCloud',
+                    'user_id' => $user->id,
+                    'activity' => 'Berhasil login ke portal PixieCloud (Infrastruktur Vault Diperiksa)',
                     'ip_address' => $request->ip(),
                 ]);
 
@@ -59,7 +76,7 @@ class AuthController extends Controller
             return redirect()->back()->withInput()->with('error', 'Alamat email atau kata sandi Anda tidak cocok dengan catatan kami.');
 
         } catch (\Exception $e) {
-            return redirect()->back()->withInput()->with('error', 'Otentikasi gagal: ' . $e->getMessage());
+            return redirect()->back()->withInput()->with('error', 'Otentikasi atau sinkronisasi cloud gagal: ' . $e->getMessage());
         }
     }
 
@@ -106,7 +123,6 @@ class AuthController extends Controller
             ]);
 
             $bucketName = 'pixie-' . strtolower($request->username) . '-' . Str::random(4);
-            
             Bucket::create([
                 'user_id' => $user->id,
                 'bucket_name' => $bucketName,

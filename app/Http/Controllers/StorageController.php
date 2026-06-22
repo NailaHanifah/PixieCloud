@@ -14,10 +14,23 @@ class StorageController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $bucket = Bucket::where('user_id', $user->id)->first(); 
+        $bucket = Bucket::where('user_id', $user->id)->first();
         
-        $objects = $bucket ? $bucket->objects : collect(); 
+        if ($bucket) {
+            $cleanBucketName = strtolower($bucket->bucket_name);
+            
+            $miniStackUrl = "http://127.0.0.1:4566/" . $cleanBucketName;
 
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $miniStackUrl);
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT"); 
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+
+        $objects = ObjectStorage::where('bucket_id', $bucket->id ?? 0)->get();
         return view('storage', compact('bucket', 'objects'));
     }
 
@@ -47,8 +60,16 @@ class StorageController extends Controller
 
         try {
             $fileName = time() . '_' . $file->getClientOriginalName();
-            $cleanBucketName = strtolower($bucket->bucket_name);
             
+            // 🌿 JALUR SAKRAL: Masukkan langsung ke folder 'public/uploads' agar gampang dibaca browser
+            $targetDir = public_path('uploads');
+            if (!file_exists($targetDir)) {
+                mkdir($targetDir, 0755, true);
+            }
+            
+            $file->move($targetDir, $fileName);
+            
+            $cleanBucketName = strtolower($bucket->bucket_name);
             $fakeCloudUrl = "http://127.0.0.1:4566/" . $cleanBucketName . "/" . $fileName;
 
             ObjectStorage::create([
@@ -68,8 +89,19 @@ class StorageController extends Controller
             return redirect()->back()->with('success', 'Arsip file digital berhasil divalidasi dan disimpan di server virtual!');
 
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Gagal mengirim file ke MiniStack: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Gagal memproses file: ' . $e->getMessage());
         }
+    }
+
+    public function logSuccess(Request $request)
+    {
+        $user = Auth::user();
+        ActivityLog::create([
+            'user_id' => $user->id,
+            'activity' => "Berhasil mendorong objek data [{$request->file_name}] masuk ke dalam Vault",
+            'ip_address' => $request->ip(),
+        ]);
+        return response()->json(['status' => 'logged']);
     }
 
     public function download(int $id)
@@ -104,6 +136,44 @@ class StorageController extends Controller
         } catch (\Exception $e) {
             return $this->handleBypassDemo($object, $isStream);
         }
+    }
+
+    public function destroy(int $id)
+    {
+        $object = ObjectStorage::findOrFail($id);
+        $user = Auth::user();
+
+        try {
+            $filePath = public_path('uploads/' . $object->object_key);
+            if (file_exists($filePath)) {
+                unlink($filePath);
+            }
+
+            $object->delete();
+
+            ActivityLog::create([
+                'user_id' => $user->id,
+                'activity' => "Mengeksekusi perintah destruksi permanen pada objek: {$object->object_key}",
+                'ip_address' => request()->ip(),
+            ]);
+
+            return redirect()->back()->with('success', 'Objek data berhasil dihancurkan secara permanen dari Vault!');
+
+        } catch (\Exception $e) {
+            return redirect()->back()->with('error', 'Gagal menghapus objek: ' . $e->getMessage());
+        }
+    }
+
+
+    public function activityLogs()
+    {
+        $user = Auth::user();
+        
+        $logs = ActivityLog::where('user_id', $user->id)->orderBy('created_at', 'desc')->get();
+        
+        $bucket = Bucket::where('user_id', $user->id)->first();
+
+        return view('logs', compact('logs', 'bucket'));
     }
 
     private function handleBypassDemo($object, $isStream)

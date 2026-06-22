@@ -28,6 +28,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/storage', [StorageController::class, 'index'])->name('storage');
     Route::post('/storage/upload', [StorageController::class, 'upload'])->name('storage.upload'); 
     Route::get('/storage/download/{id}', [StorageController::class, 'download'])->name('storage.download');
-    
+    Route::post('/storage/log-success', [StorageController::class, 'logSuccess'])->name('storage.log_success');
+    Route::delete('/storage/{id}', [StorageController::class, 'destroy'])->name('storage.destroy');
+    Route::get('/logs', [StorageController::class, 'activityLogs'])->name('storage.logs');
+
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 });

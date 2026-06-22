@@ -23,6 +23,8 @@
                 <a href="/services" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Paket Sewa</a>
                 <a href="/dashboard" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Kredensial</a>
                 <a href="/storage" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Penyimpanan</a>
+                <a href="/logs" class="text-[#8C8275] hover:text-[#2C3E2B] transition pb-1">Riwayat</a>
+
                 <a href="#" onclick="event.preventDefault(); document.getElementById('logout-form').submit();" 
                 class="text-red-600 hover:text-red-800 font-medium transition pb-1">Keluar Portal</a>
                 <form id="logout-form" action="{{ route('logout') }}" method="POST" class="hidden">@csrf</form>
