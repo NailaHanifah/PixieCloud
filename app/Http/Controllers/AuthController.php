@@ -68,7 +68,7 @@ class AuthController extends Controller
                     'ip_address' => $request->ip(),
                 ]);
 
-                $redirectUrl = (Auth::user()->role === 'admin') ? '/admin/dashboard' : '/dashboard';
+                $redirectUrl = (Auth::user()->role === 'admin') ? '/admin' : '/dashboard';
 
                 return redirect($redirectUrl)->with('success', 'Gerbang akses terbuka. Selamat datang kembali!');
             }

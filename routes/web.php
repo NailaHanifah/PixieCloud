@@ -4,7 +4,8 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CredentialController; 
 use App\Http\Controllers\StorageController; 
-use App\Http\Controllers\ServiceController; 
+use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\AdminController; 
 
 Route::get('/', [AuthController::class, 'showLandingPage'])->name('welcome');
 
@@ -20,6 +21,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [CredentialController::class, 'revealCredentialsPage'])->name('dashboard');
     Route::post('/dashboard/reveal', [CredentialController::class, 'showCredentials'])->name('dashboard.reveal');
     
+    Route::get('/admin', [AdminController::class, 'index'])->name('admin.dashboard');
+
     // Paket Sewa
     Route::get('/services', [ServiceController::class, 'index'])->name('services');
     Route::post('/services/upgrade', [ServiceController::class, 'upgrade'])->name('services.upgrade'); 
