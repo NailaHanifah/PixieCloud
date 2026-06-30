@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'admin' => AdminMiddleware::class,
         ]);
+
+        $middleware->validateCsrfTokens(except: [
+        'api/external/upload',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
     })->create();

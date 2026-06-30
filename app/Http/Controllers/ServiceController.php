@@ -12,9 +12,27 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Aws\S3\S3Client;
 
 class ServiceController extends Controller
 {
+    /**
+     * Helper: Auto-create bucket di MiniStack
+     */
+    private function ensureBucketExists($bucketName)
+    {
+        $cleanBucketName = strtolower($bucketName);
+        $miniStackUrl = "http://127.0.0.1:4566/" . $cleanBucketName;
+
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $miniStackUrl);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 3);
+        curl_exec($ch);
+        curl_close($ch);
+    }
+
     public function index()
     {
         $services = Service::all();
@@ -62,12 +80,24 @@ class ServiceController extends Controller
                 'status' => 'Active',
             ]);
 
-            $bucket = Bucket::where('user_id', $user->id)->first(); 
+            $bucket = Bucket::where('user_id', $user->id)->first();
+            
             if ($bucket) {
                 $bucket->update([
                     'allocated_size_mb' => $newService->max_storage_mb 
                 ]);
+            } else {
+                // ⭐ Jika belum punya bucket, buat baru
+                $bucketName = 'pixie-' . $user->username . '-' . Str::random(4);
+                $bucket = Bucket::create([
+                    'user_id' => $user->id,
+                    'bucket_name' => $bucketName,
+                    'allocated_size_mb' => $newService->max_storage_mb,
+                ]);
             }
+
+            // ⭐ AUTO-CREATE BUCKET DI MINISTACK
+            $this->ensureBucketExists($bucket->bucket_name);
 
             ActivityLog::create([
                 'user_id' => $user->id,

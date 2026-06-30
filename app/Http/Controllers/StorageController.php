@@ -8,26 +8,51 @@ use App\Models\ActivityLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
+use Aws\S3\S3Client;
 
 class StorageController extends Controller
 {
+    private function ensureBucketExists($bucketName)
+    {
+        $cleanBucketName = strtolower($bucketName);
+
+        try {
+            $s3 = new S3Client([
+                'version' => 'latest',
+                'region'  => env('AWS_DEFAULT_REGION', 'us-east-1'),
+                'endpoint'=> env('AWS_ENDPOINT', 'http://127.0.0.1:4566'),
+                'use_path_style_endpoint' => true,
+                'credentials' => [
+                    'key'    => env('AWS_ACCESS_KEY_ID', 'test'),
+                    'secret' => env('AWS_SECRET_ACCESS_KEY', 'test'),
+                ]
+            ]);
+
+            if (!$s3->doesBucketExist($cleanBucketName)) {
+                $s3->createBucket([
+                    'Bucket' => $cleanBucketName,
+                ]);
+                
+                Log::info("Auto-create bucket BERHASIL didirikan di MiniStack: {$cleanBucketName}");
+            }
+
+            return true;
+
+        } catch (\Exception $e) {
+            Log::error("Auto-create bucket GAGAL: " . $e->getMessage());
+            return false;
+        }
+    }
+
     public function index()
     {
         $user = Auth::user();
         $bucket = Bucket::where('user_id', $user->id)->first();
         
         if ($bucket) {
-            $cleanBucketName = strtolower($bucket->bucket_name);
-            
-            $miniStackUrl = "http://127.0.0.1:4566/" . $cleanBucketName;
-
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $miniStackUrl);
-            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "PUT"); 
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 3);
-            curl_exec($ch);
-            curl_close($ch);
+            // ⭐ AUTO-CREATE BUCKET DI MINISTACK
+            $this->ensureBucketExists($bucket->bucket_name);
         }
 
         $objects = ObjectStorage::where('bucket_id', $bucket->id ?? 0)->get();
@@ -47,6 +72,9 @@ class StorageController extends Controller
             return redirect()->back()->with('error', 'Ruang penyimpanan (Vault) belum didirikan.');
         }
 
+        // 1. Pastikan bucket fisik sudah terbuat di Docker MiniStack
+        $this->ensureBucketExists($bucket->bucket_name);
+
         $file = $request->file('object_file');
         $fileSizeBytes = $file->getSize();
         $fileSizeMB = $fileSizeBytes / (1024 * 1024);
@@ -60,18 +88,39 @@ class StorageController extends Controller
 
         try {
             $fileName = time() . '_' . $file->getClientOriginalName();
-            
-            // 🌿 JALUR SAKRAL: Masukkan langsung ke folder 'public/uploads' agar gampang dibaca browser
+            $cleanBucketName = strtolower($bucket->bucket_name);
+
+            // 2. 🔥 PERBAIKAN UTAMA: Kirim file biner secara nyata ke Docker MiniStack port 4566 via S3 Client
+            $s3 = new \Aws\S3\S3Client([
+                'version' => 'latest',
+                'region'  => env('AWS_DEFAULT_REGION', 'us-east-1'),
+                'endpoint'=> env('AWS_ENDPOINT', 'http://127.0.0.1:4566'),
+                'use_path_style_endpoint' => true,
+                'credentials' => [
+                    'key'    => env('AWS_ACCESS_KEY_ID', 'test'),
+                    'secret' => env('AWS_SECRET_ACCESS_KEY', 'test'),
+                ]
+            ]);
+
+            // Dorong file ke Docker
+            $s3->putObject([
+                'Bucket' => $cleanBucketName,
+                'Key'    => $fileName,
+                'Body'   => fopen($file->getRealPath(), 'r'),
+                'ContentType' => $file->getClientMimeType(),
+            ]);
+
+            // 3. Simpan juga cadangan ke folder public/uploads laptop jika diperlukan web
             $targetDir = public_path('uploads');
             if (!file_exists($targetDir)) {
                 mkdir($targetDir, 0755, true);
             }
-            
             $file->move($targetDir, $fileName);
             
-            $cleanBucketName = strtolower($bucket->bucket_name);
+            // URL arah endpoint MiniStack Docker
             $fakeCloudUrl = "http://127.0.0.1:4566/" . $cleanBucketName . "/" . $fileName;
 
+            // 4. Catat metadata objek ke database Laragon
             ObjectStorage::create([
                 'bucket_id' => $bucket->id,
                 'object_key' => $fileName,
@@ -80,16 +129,17 @@ class StorageController extends Controller
                 'file_url' => $fakeCloudUrl, 
             ]);
 
+            // 5. Catat log aktivitas user
             ActivityLog::create([
                 'user_id' => $user->id,
                 'activity' => "Berhasil mendorong objek data [{$fileName}] masuk ke dalam Vault",
                 'ip_address' => $request->ip(),
             ]);
 
-            return redirect()->back()->with('success', 'Arsip file digital berhasil divalidasi dan disimpan di server virtual!');
+            return redirect()->back()->with('success', 'Arsip file digital berhasil divalidasi dan disimpan di server virtual MiniStack!');
 
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Gagal memproses file: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Gagal memproses file ke MiniStack: ' . $e->getMessage());
         }
     }
 
